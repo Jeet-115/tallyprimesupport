@@ -14,6 +14,7 @@ connectDB();
 // Middleware
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://tallyprimesupport.vercel.app",
 ];
 
 app.use(
