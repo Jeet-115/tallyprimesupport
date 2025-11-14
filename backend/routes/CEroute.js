@@ -24,7 +24,7 @@ router.get("/", getAllChallans);
 // Monthly Excel routes (must be before /:id route)
 router.get("/monthly-excel/:year/:month", generateMonthlyExcelFile);
 router.get("/monthly-excel/list", getMonthlyExcelFiles);
-router.get("/monthly-excel/download/:filename", downloadMonthlyExcel);
+router.get("/monthly-excel/download", downloadMonthlyExcel);
 
 // Generate PDF for existing invoice (must be before /:id route)
 router.get("/generate-pdf/:id", generatePdfForInvoice);

@@ -66,10 +66,16 @@ const InvoiceHistory = () => {
           const contentDisposition = response.headers.get('content-disposition');
           let filename = `${challan.invoiceNumber}_${challan.buyer}.pdf`;
           if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
-            if (filenameMatch) {
-              filename = filenameMatch[1];
+            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+            if (filenameMatch && filenameMatch[1]) {
+              filename = filenameMatch[1].replace(/['"]/g, ''); // Remove quotes
             }
+          }
+          
+          // Sanitize filename: remove trailing underscores before .pdf
+          filename = filename.replace(/\.pdf_?$/i, '.pdf').replace(/_+$/g, '').replace(/_+\.pdf$/i, '.pdf');
+          if (!filename.endsWith('.pdf')) {
+            filename += '.pdf';
           }
           
           link.setAttribute('download', filename);

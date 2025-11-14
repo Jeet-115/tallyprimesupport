@@ -33,14 +33,17 @@ const sanitizeForFilename = (value, fallback) => {
     .toString()
     .trim()
     .replace(/\s+/g, "_")
-    .replace(/[^a-zA-Z0-9_-]/g, "");
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .replace(/^_+|_+$/g, ""); // Remove leading/trailing underscores
   return safeValue || (fallback ? sanitizeForFilename(fallback, "file") : "file");
 };
 
 const buildInvoiceFilename = (invoiceNumber, buyer) => {
   const invoicePart = sanitizeForFilename(invoiceNumber, "invoice");
   const buyerPart = sanitizeForFilename(buyer, "customer");
-  return `${invoicePart}_${buyerPart}.pdf`;
+  // Remove any trailing underscores and ensure .pdf extension
+  const filename = `${invoicePart}_${buyerPart}.pdf`.replace(/_+\.pdf$/g, ".pdf");
+  return filename;
 };
 
 // Create a new challan (draft or completed)
@@ -600,11 +603,27 @@ export const getMonthlyExcelFiles = async (req, res) => {
 // Download monthly Excel file
 export const downloadMonthlyExcel = async (req, res) => {
   try {
-    const { filename } = req.params;
+    // Get filename from query parameter instead of path parameter
+    let { filename } = req.query;
+    
+    if (!filename) {
+      return res.status(400).json({
+        error: "Filename is required",
+      });
+    }
+    
+    // Decode URL-encoded filename (handle errors if already decoded)
+    try {
+      filename = decodeURIComponent(filename);
+    } catch (e) {
+      // If decoding fails, use the original filename
+      console.warn("Filename decoding failed, using original:", filename);
+    }
 
     if (!filename || !filename.endsWith(".xlsx")) {
+      console.error("Invalid filename format:", filename);
       return res.status(400).json({
-        error: "Invalid filename",
+        error: "Invalid filename format. Expected .xlsx file.",
       });
     }
 

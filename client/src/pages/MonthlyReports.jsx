@@ -77,8 +77,10 @@ const MonthlyReports = () => {
 
   const handleDownload = async (filename) => {
     try {
+      // URL encode the filename to handle special characters and use query parameter
+      const encodedFilename = encodeURIComponent(filename);
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL}/api/challans/monthly-excel/download/${filename}`,
+        `${import.meta.env.VITE_API_BASE_URL}/api/challans/monthly-excel/download?filename=${encodedFilename}`,
         {
           method: 'GET',
           credentials: 'include',
