@@ -1,5 +1,22 @@
 import axiosInstance from '../utils/axiosInstance';
 
+const sanitizeFilename = (name, fallback = 'invoice.pdf') => {
+  if (!name) return fallback;
+  let cleaned = name
+    .trim()
+    .replace(/["']/g, '')
+    .replace(/\s+/g, '_')
+    .replace(/[^\w.-]/g, '_');
+
+  cleaned = cleaned.replace(/_+$/, '');
+
+  if (!cleaned.toLowerCase().endsWith('.pdf')) {
+    cleaned = `${cleaned.replace(/\.+$/, '')}.pdf`;
+  }
+
+  return cleaned || fallback;
+};
+
 // Get all challans with optional filters
 export const getAllChallans = async (params = {}) => {
   const queryParams = new URLSearchParams();
@@ -53,13 +70,15 @@ export const saveAndDownload = async (challanData) => {
   
   // Extract filename from Content-Disposition header if available
   const contentDisposition = res.headers['content-disposition'];
-  let filename = 'invoice.pdf';
+  let filename = null;
   if (contentDisposition) {
-    const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+    const filenameMatch = contentDisposition.match(/filename[^;=\n]*=\s*"?([^\";]+)"?/i);
     if (filenameMatch) {
       filename = filenameMatch[1];
     }
   }
+  const fallbackFilename = `${challanData?.invoiceNumber || 'invoice'}_${challanData?.buyer || 'customer'}.pdf`;
+  filename = sanitizeFilename(filename || fallbackFilename);
   
   // Use invoice number from response if available, otherwise use extracted filename
   // The backend should return invoice number in the response

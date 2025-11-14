@@ -8,6 +8,9 @@ import {
   saveAndDownload,
   generatePdfForInvoice,
   deleteChallan,
+  generateMonthlyExcelFile,
+  getMonthlyExcelFiles,
+  downloadMonthlyExcel,
 } from "../controllers/CEcontroller.js";
 
 const router = express.Router();
@@ -17,6 +20,11 @@ router.post("/", createChallan);
 
 // Get all challans (with optional query params: status, page, limit)
 router.get("/", getAllChallans);
+
+// Monthly Excel routes (must be before /:id route)
+router.get("/monthly-excel/:year/:month", generateMonthlyExcelFile);
+router.get("/monthly-excel/list", getMonthlyExcelFiles);
+router.get("/monthly-excel/download/:filename", downloadMonthlyExcel);
 
 // Generate PDF for existing invoice (must be before /:id route)
 router.get("/generate-pdf/:id", generatePdfForInvoice);

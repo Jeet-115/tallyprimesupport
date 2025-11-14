@@ -392,7 +392,7 @@ const Home = () => {
                             <option value="PCS">PCS</option>
                             <option value="BOX">BOX</option>
                             <option value="SET">SET</option>
-                            <option value="UNIT">UNIT</option>
+                            <option value="SQ FT">SQ FT</option>
                           </select>
                         </td>
                         <td className="px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-orange-700">

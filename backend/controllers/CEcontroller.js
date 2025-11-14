@@ -1,5 +1,7 @@
 import Challan from "../models/CEmodel.js";
+import MonthlyReport from "../models/MonthlyReportModel.js";
 import { generateChallanPdf } from "../utils/challanPdfGenerator.js";
+import { generateMonthlyExcel } from "../utils/excelGenerator.js";
 import fs from "fs";
 
 // Helper function to generate next invoice number
@@ -24,6 +26,21 @@ const getNextInvoiceNumber = async () => {
     // Fallback: use timestamp-based number
     return String(Date.now()).slice(-6).padStart(6, "0");
   }
+};
+
+const sanitizeForFilename = (value, fallback) => {
+  const safeValue = (value || fallback || "")
+    .toString()
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_-]/g, "");
+  return safeValue || (fallback ? sanitizeForFilename(fallback, "file") : "file");
+};
+
+const buildInvoiceFilename = (invoiceNumber, buyer) => {
+  const invoicePart = sanitizeForFilename(invoiceNumber, "invoice");
+  const buyerPart = sanitizeForFilename(buyer, "customer");
+  return `${invoicePart}_${buyerPart}.pdf`;
 };
 
 // Create a new challan (draft or completed)
@@ -362,11 +379,13 @@ export const saveAndDownload = async (req, res) => {
     const pdfPath = await generateChallanPdf(invoiceData, true);
 
     // Send PDF as download
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="invoice-${challan.invoiceNumber}.pdf"`
+    const downloadFilename = buildInvoiceFilename(
+      challan.invoiceNumber,
+      challan.buyer
     );
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadFilename}"`);
 
     // Stream the PDF file
     const fileStream = fs.createReadStream(pdfPath);
@@ -421,11 +440,13 @@ export const generatePdfForInvoice = async (req, res) => {
     const pdfPath = await generateChallanPdf(invoiceData, true);
 
     // Send PDF as download with invoice number as filename
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="invoice-${challan.invoiceNumber}.pdf"`
+    const downloadFilename = buildInvoiceFilename(
+      challan.invoiceNumber,
+      challan.buyer
     );
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${downloadFilename}"`);
 
     // Stream the PDF file
     const fileStream = fs.createReadStream(pdfPath);
@@ -467,6 +488,145 @@ export const deleteChallan = async (req, res) => {
     console.error("Error deleting challan:", error);
     res.status(500).json({
       error: "Failed to delete challan",
+      message: error.message,
+    });
+  }
+};
+
+// Generate monthly Excel file
+export const generateMonthlyExcelFile = async (req, res) => {
+  try {
+    const { year, month } = req.params;
+
+    if (!year || !month) {
+      return res.status(400).json({
+        error: "Year and month are required",
+      });
+    }
+
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+
+    if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({
+        error: "Invalid year or month",
+      });
+    }
+
+    // Get start and end dates for the month (format: YYYY-MM-DD)
+    const monthStr = String(monthNum).padStart(2, "0");
+    const startDateStr = `${yearNum}-${monthStr}-01`;
+    const lastDay = new Date(yearNum, monthNum, 0).getDate();
+    const endDateStr = `${yearNum}-${monthStr}-${String(lastDay).padStart(2, "0")}`;
+
+    // Query invoices for the month (only completed invoices)
+    // Date is stored as string in YYYY-MM-DD format, so we can use string comparison
+    const invoices = await Challan.find({
+      status: "completed",
+      date: {
+        $gte: startDateStr,
+        $lte: endDateStr,
+      },
+    }).sort({ date: 1, invoiceNumber: 1 });
+
+    if (invoices.length === 0) {
+      return res.status(404).json({
+        error: "No invoices found for the specified month",
+      });
+    }
+
+    // Generate Excel file buffer
+    const { buffer, filename, invoicesCount } = await generateMonthlyExcel(
+      invoices,
+      yearNum,
+      monthNum
+    );
+
+    // Store or update in database
+    await MonthlyReport.findOneAndUpdate(
+      { year: yearNum, month: monthNum },
+      {
+        filename,
+        data: buffer,
+        size: buffer.length,
+        invoicesCount,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    // Send Excel file as download
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error generating monthly Excel:", error);
+    res.status(500).json({
+      error: "Failed to generate monthly Excel",
+      message: error.message,
+    });
+  }
+};
+
+// Get list of available monthly Excel files
+export const getMonthlyExcelFiles = async (req, res) => {
+  try {
+    const reports = await MonthlyReport.find({})
+      .sort({ year: -1, month: -1 })
+      .select("filename size createdAt updatedAt year month invoicesCount");
+
+    const data = reports.map((report) => ({
+      filename: report.filename,
+      size: report.size,
+      createdAt: report.createdAt,
+      modifiedAt: report.updatedAt,
+      year: report.year,
+      month: report.month,
+      invoicesCount: report.invoicesCount,
+    }));
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    console.error("Error getting monthly Excel files:", error);
+    res.status(500).json({
+      error: "Failed to get monthly Excel files",
+      message: error.message,
+    });
+  }
+};
+
+// Download monthly Excel file
+export const downloadMonthlyExcel = async (req, res) => {
+  try {
+    const { filename } = req.params;
+
+    if (!filename || !filename.endsWith(".xlsx")) {
+      return res.status(400).json({
+        error: "Invalid filename",
+      });
+    }
+
+    const report = await MonthlyReport.findOne({ filename });
+
+    if (!report) {
+      return res.status(404).json({
+        error: "File not found",
+      });
+    }
+
+    // Send Excel file as download
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(report.data);
+  } catch (error) {
+    console.error("Error downloading monthly Excel:", error);
+    res.status(500).json({
+      error: "Failed to download monthly Excel",
       message: error.message,
     });
   }

@@ -150,19 +150,17 @@ const drawTableBorders = (doc, startX, startY, headerHeight, rowHeights, colWidt
   });
 };
 
-// Add header with 80% width image
+// Add header with image matching table width
 const addHeader = async (doc) => {
   try {
     if (fs.existsSync(LOGO_PATH)) {
-      const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-      const imageWidth = pageWidth * 0.8;
+      const tableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+      const imageWidth = tableWidth;
       const imageHeight = 80;
-      const centerX = (doc.page.width - imageWidth) / 2;
-      doc.image(LOGO_PATH, centerX, doc.y, {
+      const startX = doc.page.margins.left;
+      doc.image(LOGO_PATH, startX, doc.y, {
         width: imageWidth,
         height: imageHeight,
-        fit: [imageWidth, imageHeight],
-        align: "center",
       });
       doc.y += imageHeight + 15;
     } else {
@@ -468,18 +466,40 @@ const addFooter = (doc, invoiceData) => {
   // Left side (60%) - Company info
   doc.font("Helvetica").fontSize(8);
   
-  // Draw border around left section
-  const leftSectionHeight = 200;
-  doc.rect(startX, currentY, leftWidth, leftSectionHeight).stroke();
-  
   let leftY = currentY + 6;
   
-  // GSTIN line
-  doc.text("GSTIN NO.: 24BETPM5139L1ZW  State : Gujrat(24) COMPOSITION DEALERS", startX + 4, leftY, { width: leftWidth - 8 });
+  // GSTIN line with bold GSTIN number
+  doc.font("Helvetica").fontSize(8);
+  const gstinLabel = "GSTIN NO.: ";
+  const gstinNumber = "24BETPM5139L1ZW";
+  const gstinRest = "  State : Gujrat(24) COMPOSITION DEALERS";
+  doc.text(gstinLabel, startX + 4, leftY);
+  const gstinX = startX + 4 + doc.widthOfString(gstinLabel);
+  doc.font("Helvetica-Bold").fontSize(8);
+  doc.text(gstinNumber, gstinX, leftY);
+  const afterGstinX = gstinX + doc.widthOfString(gstinNumber);
+  doc.font("Helvetica").fontSize(8);
+  const remainingWidth = leftWidth - 8 - (afterGstinX - startX - 4);
+  if (remainingWidth > 0) {
+    doc.text(gstinRest, afterGstinX, leftY, { width: remainingWidth });
+  }
   leftY += 14;
   
-  // Bank Name
-  doc.text("Bank Name : Indian Overseas Bank, Gotri Road, Vadodara.", startX + 4, leftY, { width: leftWidth - 8 });
+  // Bank Name with bold bank name
+  doc.font("Helvetica").fontSize(8);
+  const bankLabel = "Bank Name : ";
+  const bankName = "Indian Overseas Bank";
+  const bankRest = ", Gotri Road, Vadodara.";
+  doc.text(bankLabel, startX + 4, leftY);
+  const bankX = startX + 4 + doc.widthOfString(bankLabel);
+  doc.font("Helvetica-Bold").fontSize(8);
+  doc.text(bankName, bankX, leftY);
+  const afterBankX = bankX + doc.widthOfString(bankName);
+  doc.font("Helvetica").fontSize(8);
+  const bankRemainingWidth = leftWidth - 8 - (afterBankX - startX - 4);
+  if (bankRemainingWidth > 0) {
+    doc.text(bankRest, afterBankX, leftY, { width: bankRemainingWidth });
+  }
   leftY += 14;
   
   // Account details
@@ -489,9 +509,9 @@ const addFooter = (doc, invoiceData) => {
   // Terms & Conditions header
   doc.font("Helvetica-Bold").fontSize(9);
   doc.text("Term & Condition:", startX + 4, leftY);
-  leftY += 16;
+  leftY += 12;
   
-  // Terms & Conditions - calculate dynamic heights for each point
+  // Terms & Conditions - calculate dynamic heights for each point with reduced spacing
   doc.font("Helvetica").fontSize(8);
   const terms = [
     "1) Measurement shall be consider as Standard Size.",
@@ -506,19 +526,23 @@ const addFooter = (doc, invoiceData) => {
     if (line) {
       // Calculate the actual height needed for this line of text
       const textHeight = doc.heightOfString(line, { width: leftWidth - 16 });
-      // Add padding (4px top + 4px bottom = 8px total)
-      const lineHeight = textHeight + 8;
+      // Reduced padding (2px top + 2px bottom = 4px total instead of 8px)
+      const lineHeight = textHeight + 4;
       
-      doc.text(line, startX + 8, leftY + 4, { width: leftWidth - 16 });
+      doc.text(line, startX + 8, leftY + 2, { width: leftWidth - 16 });
       leftY += lineHeight;
     } else {
-      leftY += 6;
+      leftY += 4;
     }
   });
+  
+  // Calculate actual left section height based on content
+  const leftSectionHeight = leftY - currentY + 6;
+  doc.rect(startX, currentY, leftWidth, leftSectionHeight).stroke();
 
   // Right side (40%) - Signature section
-  // Draw border around right section
-  const rightSectionHeight = 200;
+  // Use the same height as left section for consistency
+  const rightSectionHeight = leftSectionHeight;
   doc.rect(rightStartX, currentY, rightWidth, rightSectionHeight).stroke();
   
   const rightY = currentY;
@@ -532,9 +556,9 @@ const addFooter = (doc, invoiceData) => {
     align: "center",
   });
 
-  // Signature image cell
+  // Signature image cell - reduced height to match reduced left section
   const sigCellY = rightY + headerCellHeight;
-  const sigCellHeight = 120;
+  const sigCellHeight = rightSectionHeight - headerCellHeight - headerCellHeight; // Total minus header and signatory cells
   doc.rect(rightStartX, sigCellY, rightWidth, sigCellHeight).stroke();
   
   try {

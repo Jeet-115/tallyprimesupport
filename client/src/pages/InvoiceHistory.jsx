@@ -61,7 +61,18 @@ const InvoiceHistory = () => {
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', `invoice-${challan.invoiceNumber}.pdf`);
+          
+          // Extract filename from Content-Disposition header
+          const contentDisposition = response.headers.get('content-disposition');
+          let filename = `${challan.invoiceNumber}_${challan.buyer}.pdf`;
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+            if (filenameMatch) {
+              filename = filenameMatch[1];
+            }
+          }
+          
+          link.setAttribute('download', filename);
           document.body.appendChild(link);
           link.click();
           link.remove();
